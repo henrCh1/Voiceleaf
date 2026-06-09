@@ -1,0 +1,44 @@
+# ---- Android / Gradle / Android Studio ----
+
+# Built application files
+*.apk
+*.aab
+*.aar
+*.ap_
+*.dex
+*.class
+
+# Gradle
+.gradle/
+build/
+# (build/ catches both /build and /app/build)
+
+# Local machine config (SDK path, etc.) — must never be committed
+local.properties
+
+# Android Studio / IntelliJ IDEA
+*.iml
+.idea/
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin build cache (Kotlin 2.0+)
+.kotlin/
+
+# Generated output
+bin/
+gen/
+out/
+
+# Signing secrets — never commit keystores
+*.jks
+*.keystore
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
