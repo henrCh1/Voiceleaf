@@ -60,11 +60,13 @@ class JournalRepository(
 
     // ---- draft ----
 
-    fun currentWeekEntries(): Flow<List<Entry>> {
-        val today = WeekMath.localDate(now())
+    /** Live entries of the ISO week that [anchorMillis] falls in. The caller passes a fresh
+     *  timestamp so a long-lived process that crossed midnight/week boundary shows the right week. */
+    fun entriesForWeek(anchorMillis: Long): Flow<List<Entry>> {
+        val day = WeekMath.localDate(anchorMillis)
         return entryDao.observeWeekLive(
-            WeekMath.weekStartMillis(today),
-            WeekMath.weekEndExclusiveMillis(today)
+            WeekMath.weekStartMillis(day),
+            WeekMath.weekEndExclusiveMillis(day)
         )
     }
 
@@ -95,7 +97,15 @@ class JournalRepository(
     }
 
     suspend fun softDelete(entry: Entry) {
-        entryDao.update(entry.copy(deletedAt = now(), syncDirty = true, updatedAt = now()))
+        entryDao.softDeleteById(entry.id, now())
+    }
+
+    /** User hand-edit of an entry's finished text (from the 本周记录 / 历史 list). createdAt
+     *  is left untouched so the entry stays in its original week/day; the week is marked dirty. */
+    suspend fun editEntry(id: Long, newText: String) {
+        val text = newText.trim()
+        if (text.isEmpty()) return
+        entryDao.editFinalText(id, text, now())
     }
 
     private suspend fun tryPolish(entry: Entry, config: PolishConfig) {
@@ -136,70 +146,102 @@ class JournalRepository(
      * Publish every dirty week. A week is uploaded only when all its live entries are POLISHED
      * (unless allowRawPublish is on), so raw speech never leaks to Obsidian. Single-flight.
      */
-    suspend fun sync(): SyncReport = syncMutex.withLock {
-        val s = settings.get()
-        if (!s.isComplete) {
-            return SyncReport(error = "请先在设置里填好润色配置（DeepSeek 或自定义）、坚果云邮箱/应用密码、目标路径")
-        }
-        val config = s.polishConfig()
-            ?: return SyncReport(error = "请先在设置里填好润色配置（DeepSeek 或自定义）")
-
-        val dirty = entryDao.dirtyEntries()
-        if (dirty.isEmpty()) return SyncReport(nothingToDo = true)
-
-        // Distinct week-start timestamps among dirty entries.
-        val weekStarts = dirty
+    /** Manual 同步: publish every week that has unsynced changes. */
+    suspend fun sync(): SyncReport {
+        val weekStarts = entryDao.dirtyEntries()
             .map { WeekMath.weekStartMillis(WeekMath.localDate(it.createdAt)) }
             .toSortedSet()
-
-        val synced = mutableListOf<String>()
-        val skipped = mutableListOf<String>()
-        val failed = mutableListOf<Pair<String, String>>()
-
-        for (startMillis in weekStarts) {
-            val anchor = WeekMath.localDate(startMillis)
-            val endMillis = WeekMath.weekEndExclusiveMillis(anchor)
-            val weekId = WeekMath.weekId(anchor)
-            val startDate = WeekMath.weekStartDate(anchor)
-            val endDate = WeekMath.weekEndDate(anchor)
-
-            // Retry polish on live RAW/FAILED entries of this week.
-            entryDao.entriesInRange(startMillis, endMillis)
-                .filter { it.deletedAt == null && it.polishStatus != PolishStatus.POLISHED }
-                .forEach { tryPolish(it, config) }
-
-            val snapshot = entryDao.entriesInRange(startMillis, endMillis)
-            val live = snapshot.filter { it.deletedAt == null }.sortedBy { it.createdAt }
-            val snapshotAt = now()
-
-            if (!s.allowRawPublish && live.any { it.polishStatus != PolishStatus.POLISHED }) {
-                skipped.add(weekId)
-                continue
-            }
-
-            val markdown = WeekRenderer.render(weekId, startDate, endDate, live)
-            val fileName = WeekMath.fileName(weekId, startDate, endDate)
-            val result = webDav.put(
-                basePath = s.webdavBasePath,
-                fileName = fileName,
-                content = markdown,
-                email = s.nutstoreEmail,
-                appPassword = s.nutstoreAppPassword
-            )
-
-            if (result.isSuccess) {
-                // Mark synced ONLY the entries we actually rendered, and only if untouched since
-                // the snapshot — so anything added/deleted during the upload stays dirty for next sync.
-                val liveIds = live.map { it.id }
-                if (liveIds.isNotEmpty()) entryDao.markSyncedByIds(liveIds, now(), snapshotAt)
-                val tombstoneIds = snapshot.filter { it.deletedAt != null }.map { it.id }
-                if (tombstoneIds.isNotEmpty()) entryDao.purgeByIds(tombstoneIds)
-                synced.add(weekId)
-            } else {
-                failed.add(weekId to (result.exceptionOrNull()?.message ?: "未知错误"))
-            }
-        }
-
-        SyncReport(synced = synced, skipped = skipped, failed = failed)
+        if (weekStarts.isEmpty()) return SyncReport(nothingToDo = true)
+        return syncWeeks(weekStarts, force = false)
     }
+
+    /** History 单周同步: force re-render & re-upload one week even if it's locally clean
+     *  (so a week whose cloud file was lost / path changed can be re-pushed on demand). */
+    suspend fun syncWeek(weekStartMillis: Long): SyncReport =
+        syncWeeks(listOf(weekStartMillis), force = true)
+
+    /** Auto catch-up on app open: silently push only PAST weeks that still have unsynced changes.
+     *  The current week is left alone so the "攒一周再发" flow stays under manual control. */
+    suspend fun catchUpPastWeeks(): SyncReport {
+        val currentWeekStart = WeekMath.weekStartMillis(WeekMath.localDate(now()))
+        val weekStarts = entryDao.dirtyEntries()
+            .map { WeekMath.weekStartMillis(WeekMath.localDate(it.createdAt)) }
+            .filter { it < currentWeekStart }
+            .toSortedSet()
+        if (weekStarts.isEmpty()) return SyncReport(nothingToDo = true)
+        return syncWeeks(weekStarts, force = false)
+    }
+
+    /**
+     * Core sync over a set of weeks. Single-flight. A week is uploaded only when all its live
+     * entries are POLISHED (unless allowRawPublish), so raw speech never leaks to Obsidian.
+     *  - force = false: skip a week with no unsynced changes (used by sync()/catchUp, whose week
+     *    lists are already dirty-only — this is belt-and-suspenders).
+     *  - force = true: re-render & re-upload regardless of dirty state (used by the per-week button).
+     */
+    private suspend fun syncWeeks(weekStarts: Collection<Long>, force: Boolean): SyncReport =
+        syncMutex.withLock {
+            val s = settings.get()
+            if (!s.isComplete) {
+                return SyncReport(error = "请先在设置里填好润色配置（DeepSeek 或自定义）、坚果云邮箱/应用密码、目标路径")
+            }
+            val config = s.polishConfig()
+                ?: return SyncReport(error = "请先在设置里填好润色配置（DeepSeek 或自定义）")
+            if (weekStarts.isEmpty()) return SyncReport(nothingToDo = true)
+
+            val synced = mutableListOf<String>()
+            val skipped = mutableListOf<String>()
+            val failed = mutableListOf<Pair<String, String>>()
+
+            for (startMillis in weekStarts.toSortedSet()) {
+                val anchor = WeekMath.localDate(startMillis)
+                val endMillis = WeekMath.weekEndExclusiveMillis(anchor)
+                val weekId = WeekMath.weekId(anchor)
+                val startDate = WeekMath.weekStartDate(anchor)
+                val endDate = WeekMath.weekEndDate(anchor)
+
+                // Retry polish on live RAW/FAILED entries of this week.
+                entryDao.entriesInRange(startMillis, endMillis)
+                    .filter { it.deletedAt == null && it.polishStatus != PolishStatus.POLISHED }
+                    .forEach { tryPolish(it, config) }
+
+                val snapshot = entryDao.entriesInRange(startMillis, endMillis)
+                val live = snapshot.filter { it.deletedAt == null }.sortedBy { it.createdAt }
+                val snapshotAt = now()
+
+                if (!s.allowRawPublish && live.any { it.polishStatus != PolishStatus.POLISHED }) {
+                    skipped.add(weekId)
+                    continue
+                }
+
+                // Nothing changed and not forced → don't waste an upload.
+                if (!force && snapshot.none { it.syncDirty }) continue
+
+                // Emptying a week uploads a "本周暂无内容" file (WeekRenderer handles empty live);
+                // we intentionally do NOT delete the remote file. The app stays the source of truth.
+                val markdown = WeekRenderer.render(weekId, startDate, endDate, live)
+                val fileName = WeekMath.fileName(weekId, startDate, endDate)
+                val result = webDav.put(
+                    basePath = s.webdavBasePath,
+                    fileName = fileName,
+                    content = markdown,
+                    email = s.nutstoreEmail,
+                    appPassword = s.nutstoreAppPassword
+                )
+
+                if (result.isSuccess) {
+                    // Mark synced ONLY the entries we actually rendered, and only if untouched since
+                    // the snapshot — so anything added/deleted during the upload stays dirty for next sync.
+                    val liveIds = live.map { it.id }
+                    if (liveIds.isNotEmpty()) entryDao.markSyncedByIds(liveIds, now(), snapshotAt)
+                    val tombstoneIds = snapshot.filter { it.deletedAt != null }.map { it.id }
+                    if (tombstoneIds.isNotEmpty()) entryDao.purgeByIds(tombstoneIds)
+                    synced.add(weekId)
+                } else {
+                    failed.add(weekId to (result.exceptionOrNull()?.message ?: "未知错误"))
+                }
+            }
+
+            SyncReport(synced = synced, skipped = skipped, failed = failed)
+        }
 }

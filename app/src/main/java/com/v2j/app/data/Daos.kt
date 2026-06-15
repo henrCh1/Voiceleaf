@@ -29,6 +29,21 @@ interface EntryDao {
     )
     suspend fun updatePolished(id: Long, text: String, status: PolishStatus, ts: Long)
 
+    /**
+     * User hand-edit of the finished text. Field-level (not @Update) so a concurrent sync can't
+     * clobber it: writes only polishedText/status/dirty/updatedAt, never touches createdAt
+     * (which decides week/day membership) or rawText (kept as the original transcript).
+     */
+    @Query(
+        "UPDATE entry SET polishedText = :text, polishStatus = 'POLISHED', syncDirty = 1, " +
+            "updatedAt = :ts WHERE id = :id AND deletedAt IS NULL"
+    )
+    suspend fun editFinalText(id: Long, text: String, ts: Long)
+
+    /** Soft-delete by id (field-level, marks dirty so the owning week is re-rendered on sync). */
+    @Query("UPDATE entry SET deletedAt = :ts, syncDirty = 1, updatedAt = :ts WHERE id = :id AND deletedAt IS NULL")
+    suspend fun softDeleteById(id: Long, ts: Long)
+
     /** Live (non-deleted) entries of one week, for the on-screen list (newest first). */
     @Query(
         "SELECT * FROM entry WHERE deletedAt IS NULL AND createdAt >= :startMillis " +

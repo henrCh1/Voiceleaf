@@ -13,8 +13,8 @@ android {
         applicationId = "com.v2j.app"
         minSdk = 26          // java.time is available without desugaring from API 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -38,6 +38,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true   // expose BuildConfig.VERSION_NAME for the in-app version label
     }
 
     packaging {

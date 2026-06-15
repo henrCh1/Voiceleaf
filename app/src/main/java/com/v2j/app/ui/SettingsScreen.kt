@@ -40,7 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.v2j.app.BuildConfig
 import com.v2j.app.JournalRepository
 import com.v2j.app.data.SettingsRepository
 import kotlinx.coroutines.launch
@@ -257,6 +259,13 @@ fun SettingsScreen(
                 ) { Text("保存", style = MaterialTheme.typography.labelLarge) }
 
                 Spacer(Modifier.height(8.dp))
+                Text(
+                    "Voiceleaf v${BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp),
+                )
             }
         }
     }

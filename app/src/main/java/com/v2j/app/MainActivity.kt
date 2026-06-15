@@ -9,10 +9,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.v2j.app.ui.HistoryScreen
 import com.v2j.app.ui.MainScreen
@@ -30,6 +35,17 @@ class MainActivity : ComponentActivity() {
                 // One shared ViewModel for Main + History.
                 val vm: MainViewModel = viewModel(factory = MainViewModel.Factory)
                 var screen by rememberSaveable { mutableStateOf(Screen.Main) }
+
+                // On every foreground: refresh the current-week anchor and auto-catch-up past weeks.
+                val context = LocalContext.current
+                DisposableEffect(context, vm) {
+                    val owner = context as? LifecycleOwner
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_START) vm.onForegrounded()
+                    }
+                    owner?.lifecycle?.addObserver(observer)
+                    onDispose { owner?.lifecycle?.removeObserver(observer) }
+                }
 
                 // System back from a sub-screen returns to Main; from Main it exits the app.
                 BackHandler(enabled = screen != Screen.Main) { screen = Screen.Main }

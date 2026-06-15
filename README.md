@@ -11,6 +11,7 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white">
   <img alt="Compose" src="https://img.shields.io/badge/Jetpack%20Compose-Material3-4285F4?logo=jetpackcompose&logoColor=white">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.1.0-2F855A">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
@@ -37,7 +38,8 @@
 - 💾 **本地优先，不丢内容** —— 输入实时存草稿；每条先存进本地数据库再润色，崩溃/断网都不丢。
 - 🗓️ **每周一个 Markdown** —— 按 ISO 周自动归档，时间标签独占一行，阅读清爽。
 - ☁️ **一键同步 Obsidian** —— 经坚果云 WebDAV 推送，电脑端 Obsidian 自动同步，手机上无需安装 Obsidian。
-- 📚 **历史回看** —— 按周、按天浏览所有记录。
+- 📚 **历史管理** —— 按周、按天浏览全部记录；可逐条**删除 / 编辑**（连润色好的成稿也能改），单周可**重新同步**。
+- 🔁 **打开即自动补传** —— 跨周后再打开 App，会自动把上周还没同步的内容推上去，不用记得手动点。
 - 🧩 **可换模型** —— 默认 DeepSeek，开箱即用；也可在「高级设置」里填任意 OpenAI 兼容接口。
 - 🔒 **隐私自持** —— 无账号、无服务器，数据与密钥都只存在你自己的手机上。
 
@@ -146,11 +148,17 @@ app/src/main/java/com/v2j/app/
 
 ## 🗺️ 路线图
 
-- [ ] WorkManager 每周自动同步并封档
-- [ ] 后台静默补润未成功的条目
+- [x] 打开 App 自动补传上周（v1.1.0 已实现）
+- [ ] WorkManager 定时后台同步（不开 App 也能推）
 - [ ] 当周文件在 Obsidian 手改后的合并
 - [ ] Room 数据导出备份（防卸载/换机丢失）
 - [ ] 语音直录模式（不看屏，拿起就说）
+
+---
+
+## 🆕 更新日志
+
+最新版本 **v1.1.0**：历史记录支持单周重新同步、单条删除与编辑，打开 App 自动补传上周。完整记录见 [CHANGELOG](./CHANGELOG.md)。
 
 ---
 

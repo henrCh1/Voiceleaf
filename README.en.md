@@ -11,6 +11,7 @@ Turn the thoughts and reviews you say out loud each day into clean written text 
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white">
   <img alt="Compose" src="https://img.shields.io/badge/Jetpack%20Compose-Material3-4285F4?logo=jetpackcompose&logoColor=white">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.1.0-2F855A">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
@@ -37,7 +38,8 @@ So Voiceleaf does exactly one thing: **gently turn speech into written prose —
 - 💾 **Local-first, never lose a word** — drafts autosave as you type; every entry is stored locally *before* polishing, surviving crashes and offline.
 - 🗓️ **One Markdown per week** — auto-filed by ISO week, with time tags on their own line for clean reading.
 - ☁️ **One-tap Obsidian sync** — pushed via Nutstore WebDAV; your desktop Obsidian syncs it automatically. No Obsidian needed on the phone.
-- 📚 **History view** — browse all entries by week and by day.
+- 📚 **History management** — browse all entries by week and day; **delete / edit** any entry (even the polished text), and **re-sync a single week**.
+- 🔁 **Auto catch-up on open** — reopen the app after a week rolls over and last week's un-synced notes are pushed automatically — no need to remember.
 - 🧩 **Bring your own model** — DeepSeek by default, ready out of the box; or point it at any OpenAI-compatible endpoint in Advanced Settings.
 - 🔒 **Privacy by design** — no account, no server. Your data and keys live only on your own phone.
 
@@ -146,11 +148,17 @@ No account, no backend. All entries live in a local database on your phone; your
 
 ## 🗺️ Roadmap
 
-- [ ] Automatic weekly sync & sealing via WorkManager
-- [ ] Background re-polishing of failed entries
+- [x] Auto catch-up of past weeks on app open (shipped in v1.1.0)
+- [ ] Scheduled background sync via WorkManager (push without opening the app)
 - [ ] Merge hand-edits made to the current week's file in Obsidian
 - [ ] Export/back up the Room database (survive uninstall / device change)
 - [ ] Eyes-free dictation mode (pick up and talk)
+
+---
+
+## 🆕 Changelog
+
+Latest **v1.1.0**: per-week re-sync, per-entry delete & edit in History, and auto catch-up of past weeks on app open. Full history in the [CHANGELOG](./CHANGELOG.md).
 
 ---
 

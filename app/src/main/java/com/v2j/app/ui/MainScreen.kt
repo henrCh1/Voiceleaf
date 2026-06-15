@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Refresh
@@ -65,6 +66,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.v2j.app.BuildConfig
 import com.v2j.app.MainViewModel
 import com.v2j.app.SyncUi
 import com.v2j.app.data.Entry
@@ -81,6 +83,7 @@ fun MainScreen(
     val draft by vm.draft.collectAsState()
     val sync by vm.sync.collectAsState()
     val snackbar = remember { SnackbarHostState() }
+    var editing by remember { mutableStateOf<Entry?>(null) }
 
     LaunchedEffect(sync) {
         val current = sync
@@ -140,7 +143,7 @@ fun MainScreen(
                 Spacer(Modifier.height(12.dp))
                 ActionRow(
                     canFinish = draft.isNotBlank(),
-                    syncing = sync == SyncUi.Running,
+                    syncing = sync is SyncUi.Running,
                     onFinish = vm::onFinish,
                     onSync = vm::onSync,
                 )
@@ -165,6 +168,7 @@ fun MainScreen(
                         items(entries, key = { it.id }) { entry ->
                             EntryCard(
                                 entry = entry,
+                                onEdit = { editing = entry },
                                 onDelete = { vm.onDelete(entry) },
                                 onRetry = { vm.onRetry(entry) },
                                 modifier = Modifier.animateItem(),
@@ -174,6 +178,14 @@ fun MainScreen(
                 }
             }
         }
+    }
+
+    editing?.let { e ->
+        EntryEditDialog(
+            initialText = (e.polishedText ?: e.rawText).trim(),
+            onDismiss = { editing = null },
+            onSave = { vm.onEdit(e, it); editing = null },
+        )
     }
 }
 
@@ -188,11 +200,20 @@ private fun Header(weekRange: String, onOpenSettings: () -> Unit, onOpenHistory:
         LeafMark(Modifier.size(30.dp))
         Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                text = "Voiceleaf",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = "Voiceleaf",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 3.dp),
+                )
+            }
             Text(
                 text = "本周 · $weekRange",
                 style = MaterialTheme.typography.labelMedium,
@@ -342,6 +363,7 @@ private fun SectionLabel(count: Int) {
 @Composable
 private fun EntryCard(
     entry: Entry,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -375,13 +397,25 @@ private fun EntryCard(
                         Spacer(Modifier.width(8.dp))
                         StatusPill(entry.polishStatus)
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
-                        Icon(
-                            Icons.Rounded.DeleteOutline,
-                            contentDescription = "删除",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (entry.polishStatus != PolishStatus.POLISHING) {
+                            IconButton(onClick = onEdit, modifier = Modifier.size(30.dp)) {
+                                Icon(
+                                    Icons.Rounded.Edit,
+                                    contentDescription = "编辑",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(17.dp),
+                                )
+                            }
+                        }
+                        IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                            Icon(
+                                Icons.Rounded.DeleteOutline,
+                                contentDescription = "删除",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(6.dp))
